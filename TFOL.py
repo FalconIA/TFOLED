@@ -114,6 +114,16 @@ except AttributeError:
 # Some other nice fonts to try: http://www.dafont.com/bitmap.php
 # font = ImageFont.truetype('Minecraftia.ttf', 8)
 
+# ─── Screensaver: prevent OLED burn-in ──────────────────────────────────────
+# Periodically invert the display (swap black/white) so that
+# permanently-lit pixels get a rest.
+INVERT_INTERVAL = 60        # seconds between inversions (1 min)
+INVERT_DURATION = 10        # how long to stay inverted (seconds)
+
+loop_count   = 0
+inverted     = False
+invert_timer = 0
+
 while True:
 
     # Draw a black filled box to clear the image.
@@ -140,15 +150,27 @@ while True:
     cmd = "df -h | awk '$NF==\"/\"{printf (\" D:%d/%dG\", $3,$2)}'"
     Disk = subprocess.check_output(cmd, shell = True )
     lt = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())
-    # Write two lines of text.
-    draw.rectangle((0,0,width,height), outline=0, fill=0)
 
+    # Write four lines of text.
+    draw.rectangle((0, 0, width, height), outline=0, fill=0)
     draw.text((x, top),       lt,  font=font, fill=255)
-    draw.text((x, top+8),       "IP: " + IP.decode('utf-8').strip(),  font=font, fill=255)
+    draw.text((x, top+8),     "IP: " + IP.decode('utf-8').strip(),  font=font, fill=255)
     draw.text((x, top+16),    CPU.decode('utf-8').strip() + " CT:" + str(tmpcore // 1000), font=font, fill=255)
     draw.text((x, top+25),    MemUsage.decode('utf-8').strip() + " " + Disk.decode('utf-8').strip(),  font=font, fill=255)
+
     # Display image.
     disp.image(image)
     disp.display()
+
+    # ── Screensaver: periodic display inversion ─────────────────────────────
+    if not inverted and loop_count > 0 and loop_count % INVERT_INTERVAL == 0:
+        disp.command(0xA7)   # SSD1306_INVERTDISPLAY
+        inverted = True
+        invert_timer = loop_count
+    if inverted and (loop_count - invert_timer) >= INVERT_DURATION:
+        disp.command(0xA6)   # SSD1306_NORMALDISPLAY
+        inverted = False
+
+    loop_count += 1
     time.sleep(1)
 
