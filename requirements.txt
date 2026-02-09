@@ -1,0 +1,13 @@
+# Core dependencies
+smbus2>=0.4.0
+Pillow>=9.0.0
+
+# ============================================================
+# GPIO dependency: choose ONE based on your OS (not both!)
+# ============================================================
+#
+# [Raspberry Pi OS] RPi.GPIO is pre-installed, skip this section.
+#
+# [Ubuntu/Debian on Pi 2-5] uncomment the next line:
+# rpi-lgpio>=0.4
+# ============================================================

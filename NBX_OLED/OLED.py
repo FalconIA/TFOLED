@@ -22,8 +22,14 @@ from __future__ import division
 import logging
 import time
 
-import Adafruit_GPIO as GPIO
-import Adafruit_GPIO.SPI as SPI
+from smbus2 import SMBus, i2c_msg
+
+# Optional: RPi.GPIO for reset pin support
+# Works with both RPi.GPIO (Pi 1-4) and rpi-lgpio (Pi 2-5)
+try:
+    import RPi.GPIO as _GPIO
+except ImportError:
+    _GPIO = None
 
 
 # Constants
@@ -72,72 +78,40 @@ class SSD1306Base(object):
     def __init__(self, width, height, rst, dc=None, sclk=None, din=None, cs=None,
                  gpio=None, spi=None, i2c_bus=None, i2c_address=SSD1306_I2C_ADDRESS,
                  i2c=None):
-        self._log = logging.getLogger('Adafruit_SSD1306.SSD1306Base')
-        self._spi = None
-        self._i2c = None
+        self._log = logging.getLogger('NBX_OLED.SSD1306Base')
         self.width = width
         self.height = height
-        self._pages = height//8
-        self._buffer = [0]*(width*self._pages)
-        # Default to platform GPIO if not provided.
-        self._gpio = gpio
-        if self._gpio is None:
-            self._gpio = GPIO.get_platform_gpio()
-        # Setup reset pin.
+        self._pages = height // 8
+        self._buffer = [0] * (width * self._pages)
+        # I2C setup using smbus2 (no platform detection needed)
+        self._i2c_address = i2c_address
+        self._i2c_bus_num = i2c_bus if i2c_bus is not None else 1
+        self._bus = SMBus(self._i2c_bus_num)
+        # Setup reset pin (optional, uses RPi.GPIO if available)
         self._rst = rst
-        if not self._rst is None:
-            self._gpio.setup(self._rst, GPIO.OUT)
-        # Handle hardware SPI
-        if spi is not None:
-            self._log.debug('Using hardware SPI')
-            self._spi = spi
-            self._spi.set_clock_hz(8000000)
-        # Handle software SPI
-        elif sclk is not None and din is not None and cs is not None:
-            self._log.debug('Using software SPI')
-            self._spi = SPI.BitBang(self._gpio, sclk, din, None, cs)
-        # Handle hardware I2C
-        elif i2c is not None:
-            self._log.debug('Using hardware I2C with custom I2C provider.')
-            self._i2c = i2c.get_i2c_device(i2c_address)
-        else:
-            self._log.debug('Using hardware I2C with platform I2C provider.')
-            import Adafruit_GPIO.I2C as I2C
-            if i2c_bus is None:
-                self._i2c = I2C.get_i2c_device(i2c_address)
-            else:
-                self._i2c = I2C.get_i2c_device(i2c_address, busnum=i2c_bus)
-        # Initialize DC pin if using SPI.
-        if self._spi is not None:
-            if dc is None:
-                raise ValueError('DC pin must be provided when using SPI.')
-            self._dc = dc
-            self._gpio.setup(self._dc, GPIO.OUT)
+        if self._rst is not None and _GPIO is not None:
+            _GPIO.setwarnings(False)
+            _GPIO.setmode(_GPIO.BCM)
+            _GPIO.setup(self._rst, _GPIO.OUT)
+
+    def close(self):
+        """Close the I2C bus connection."""
+        if self._bus is not None:
+            self._bus.close()
+            self._bus = None
 
     def _initialize(self):
         raise NotImplementedError
 
     def command(self, c):
         """Send command byte to display."""
-        if self._spi is not None:
-            # SPI write.
-            self._gpio.set_low(self._dc)
-            self._spi.write([c])
-        else:
-            # I2C write.
-            control = 0x00   # Co = 0, DC = 0
-            self._i2c.write8(control, c)
+        control = 0x00   # Co = 0, DC = 0
+        self._bus.write_byte_data(self._i2c_address, control, c)
 
     def data(self, c):
         """Send byte of data to display."""
-        if self._spi is not None:
-            # SPI write.
-            self._gpio.set_high(self._dc)
-            self._spi.write([c])
-        else:
-            # I2C write.
-            control = 0x40   # Co = 0, DC = 0
-            self._i2c.write8(control, c)
+        control = 0x40   # Co = 0, DC = 1
+        self._bus.write_byte_data(self._i2c_address, control, c)
 
     def begin(self, vccstate=SSD1306_SWITCHCAPVCC):
         """Initialize display."""
@@ -151,34 +125,30 @@ class SSD1306Base(object):
 
     def reset(self):
         """Reset the display."""
-        if self._rst is None:
+        if self._rst is None or _GPIO is None:
             return
         # Set reset high for a millisecond.
-        self._gpio.set_high(self._rst)
+        _GPIO.output(self._rst, 1)
         time.sleep(0.001)
         # Set reset low for 10 milliseconds.
-        self._gpio.set_low(self._rst)
+        _GPIO.output(self._rst, 0)
         time.sleep(0.010)
         # Set reset high again.
-        self._gpio.set_high(self._rst)
+        _GPIO.output(self._rst, 1)
 
     def display(self):
         """Write display buffer to physical display."""
-        # Write buffer data.
-        if self._spi is not None:
-            # Set DC high for data.
-            self._gpio.set_high(self._dc)
-            # Write buffer.
-            self._spi.write(self._buffer)
-        else:
-            pg=0
-            for i in range(0, len(self._buffer), 128):
-                self.command(0xB0 + pg)           # SSD1306_COLUMNADDR
-                self.command(0x00)           # Column start address. (0 = reset)
-                self.command(0x10)           # Column end address.
-                control = 0x40   # Co = 0, DC = 0
-                self._i2c.writeList(control, self._buffer[i:i+128])
-                pg = pg + 1
+        pg = 0
+        for i in range(0, len(self._buffer), self.width):
+            self.command(0xB0 + pg)               # Set page address
+            self.command(0x00)                     # Column start address low nibble
+            self.command(0x10)                     # Column start address high nibble
+            # Use i2c_msg for writes larger than SMBus 32-byte limit
+            data = [0x40] + self._buffer[i:i + self.width]
+            msg = i2c_msg.write(self._i2c_address, data)
+            self._bus.i2c_rdwr(msg)
+            pg += 1
+
     def image(self, image):
         """Set buffer to value of Python Imaging Library image.  The image should
         be in 1 bit mode and a size equal to the display size.
@@ -208,7 +178,7 @@ class SSD1306Base(object):
 
     def clear(self):
         """Clear contents of image buffer."""
-        self._buffer = [0x0f]*(self.width*self._pages)
+        self._buffer = [0x00] * (self.width * self._pages)
 
     def set_contrast(self, contrast):
         """Sets the contrast of the display.  Contrast should be a value between

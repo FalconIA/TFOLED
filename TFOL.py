@@ -100,8 +100,15 @@ bottom = height-padding
 x = 0
 
 
-# Load default font.
-font = ImageFont.load_default()
+# Load font for 128x32 OLED display (4 lines, 8px per line).
+# Pillow <=9 load_default() returned a pixel-perfect bitmap font.
+# Pillow 10+ changed it to a TTF font which looks blurry on 1-bit OLED.
+# Use load_default_imagefont() to get the original crisp bitmap font back.
+try:
+    font = ImageFont.load_default_imagefont()
+except AttributeError:
+    # Fallback for Pillow < 10.1
+    font = ImageFont.load_default()
 
 # Alternatively load a TTF font.  Make sure the .ttf font file is in the same directory as the python script!
 # Some other nice fonts to try: http://www.dafont.com/bitmap.php
@@ -136,10 +143,10 @@ while True:
     # Write two lines of text.
     draw.rectangle((0,0,width,height), outline=0, fill=0)
 
-    draw.text((x, top),     lt,  font=font, fill=255)  #"T:" + 
-    draw.text((x, top+8),       "IP: " + str(IP.decode('utf8').strip()).strip('b'),  font=font, fill=255)
-    draw.text((x, top+16),    str(CPU.decode('utf8').strip()).strip('b') + " CT:" + str(tmpcore/1000), font=font, fill=255)
-    draw.text((x, top+25),    str(MemUsage.decode('utf8').strip()).strip('b') + " " + str(Disk.decode('utf8').strip()).strip('b'),  font=font, fill=255)
+    draw.text((x, top),       lt,  font=font, fill=255)
+    draw.text((x, top+8),       "IP: " + IP.decode('utf-8').strip(),  font=font, fill=255)
+    draw.text((x, top+16),    CPU.decode('utf-8').strip() + " CT:" + str(tmpcore // 1000), font=font, fill=255)
+    draw.text((x, top+25),    MemUsage.decode('utf-8').strip() + " " + Disk.decode('utf-8').strip(),  font=font, fill=255)
     # Display image.
     disp.image(image)
     disp.display()

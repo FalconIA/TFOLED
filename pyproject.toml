@@ -1,0 +1,47 @@
+[build-system]
+requires = ["setuptools>=64", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "Nabaixin-TFOLED"
+version = "2.0.0"
+description = "Python library to use RTC Fan OLED board for a Raspberry Pi."
+readme = "README.md"
+license = {text = "MIT"}
+requires-python = ">=3.7"
+authors = [
+    {name = "Nabaixin.com", email = "nabaixin@163.com"},
+]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Operating System :: POSIX :: Linux",
+    "License :: OSI Approved :: MIT License",
+    "Intended Audience :: Developers",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.8",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Software Development",
+    "Topic :: System :: Hardware",
+]
+
+dependencies = [
+    "smbus2>=0.4.0",
+    "Pillow>=9.0.0",
+]
+
+[project.urls]
+Homepage = "https://github.com/nabaixin/TFOLED/"
+Repository = "https://github.com/nabaixin/TFOLED/"
+Issues = "https://github.com/nabaixin/TFOLED/issues"
+
+[project.optional-dependencies]
+# Raspberry Pi OS: RPi.GPIO is pre-installed, usually no need to install
+gpio-legacy = ["RPi.GPIO>=0.7.0"]
+# Ubuntu/Debian on Pi 2-5: drop-in replacement for RPi.GPIO
+gpio-modern = ["rpi-lgpio>=0.4"]
+
+[tool.setuptools.packages.find]
+exclude = ["build*", "tool*", "Readme_img*", "*.egg-info"]
