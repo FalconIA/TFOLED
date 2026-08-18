@@ -137,7 +137,7 @@ while True:
     # Shell scripts for system monitoring from here : https://unix.stackexchange.com/questions/119126/command-to-display-memory-usage-disk-usage-and-cpu-load
     cmd = "cat /sys/class/thermal/thermal_zone0/temp"
     tmpcore = int(subprocess.check_output(cmd, shell = True ))
-    if(tmpcore > 60000) :
+    if(tmpcore > 50000) :
         RPi.GPIO.output(4, True)
     if(tmpcore < 45000) :
         RPi.GPIO.output(4, False)
